@@ -1,14 +1,17 @@
 import speech_recognition as sr
-
 import pyttsx3
 import requests
 import json
+import os
+from dotenv import load_dotenv
 
-# OpenRouter API keys
+# Load environment variables from .env file
+load_dotenv()
+
+# Get OpenRouter API keys from the .env file
 open_router_keys = [
-    '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',
-    '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',
-    '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'
+    os.getenv('OPENAI_API_KEY'),
+    os.getenv('OPENAI_API_KEY_2')
 ]
 
 # Function to convert .wav file to text
@@ -80,7 +83,6 @@ def text_to_speech(text, output_filename):
         print("Converting OpenRouter response to audio...")
         engine = pyttsx3.init()
 
-        
         # Set properties for pyttsx3 engine if needed
         engine.setProperty('rate', 150)  # Speed of speech
         engine.setProperty('volume', 1)  # Volume (0.0 to 1.0)
