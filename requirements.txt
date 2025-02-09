@@ -1,3 +1,6 @@
 speechrecognition
 pyttsx3
 requests
+python-dotenv
+num2words
+inflect
