@@ -1,4 +1,5 @@
 import speech_recognition as sr
+
 import pyttsx3
 import requests
 import json
@@ -78,7 +79,7 @@ def text_to_speech(text, output_filename):
     try:
         print("Converting OpenRouter response to audio...")
         engine = pyttsx3.init()
-        
+
         
         # Set properties for pyttsx3 engine if needed
         engine.setProperty('rate', 150)  # Speed of speech
