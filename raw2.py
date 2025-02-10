@@ -4,6 +4,7 @@ import requests
 import json
 import os
 import wave
+import pyaudio  # For playing the audio
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -14,7 +15,7 @@ class RobotVoiceSystem:
         self.engine = pyttsx3.init()
         self.setup_voice()
         self.api_key = os.getenv('OPENAI_API_KEY')
-        
+
     def setup_voice(self):
         """Configure voice settings for robot-like response using a female voice"""
         voices = self.engine.getProperty('voices')
@@ -28,7 +29,7 @@ class RobotVoiceSystem:
         if not female_voice_found:
             print("Female voice not found. Using default voice.")
         self.engine.setProperty('rate', 150)  # Moderate speed
-        self.engine.setProperty('volume', 5)  # Clear volume
+        self.engine.setProperty('volume', 0.9)  # Clear volume
 
     def process_audio(self, input_wav):
         """Convert input WAV to text"""
@@ -75,14 +76,64 @@ class RobotVoiceSystem:
             return "System processing error occurred."
 
     def create_audio_response(self, text, output_wav):
-        """Convert text to WAV audio"""
+        """Convert text to WAV audio with specified properties (11000 Hz, 8-bit, Mono)"""
         try:
-            self.engine.save_to_file(text, output_wav)
+            # Save the speech to a temporary file first
+            temp_wav = "temp_output.wav"
+            self.engine.save_to_file(text, temp_wav)
             self.engine.runAndWait()
+
+            # Convert the temporary file to the desired properties: 11000 Hz, 8-bit, Mono
+            with wave.open(temp_wav, 'rb') as temp_audio:
+                # Get the parameters of the temporary file
+                params = temp_audio.getparams()
+
+                # Set desired properties for the output WAV file
+                new_params = (
+                    1,  # Mono channel
+                    1,  # 8-bit sample width
+                    11000,  # Sample rate: 11000 Hz
+                    params.nframes,  # Number of frames (unchanged)
+                    params.comptype,  # Compression type
+                    params.compname  # Compression name
+                )
+
+                # Open the output file with the desired parameters
+                with wave.open(output_wav, 'wb') as output_audio:
+                    output_audio.setparams(new_params)
+
+                    # Read the original audio data and write it to the new file with adjusted properties
+                    frames = temp_audio.readframes(params.nframes)
+                    output_audio.writeframes(frames)
+
+            os.remove(temp_wav)  # Clean up the temporary file
             return True
         except Exception as e:
             print(f"Speech generation error: {e}")
             return False
+
+    def play_wav(self, wav_file):
+        """Play the WAV file with the specified sample rate, width, and channels"""
+        try:
+            wf = wave.open(wav_file, 'rb')
+            p = pyaudio.PyAudio()
+
+            stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
+                            channels=wf.getnchannels(),
+                            rate=wf.getframerate(),
+                            output=True)
+
+            data = wf.readframes(1024)
+
+            while data:
+                stream.write(data)
+                data = wf.readframes(1024)
+
+            stream.stop_stream()
+            stream.close()
+            p.terminate()
+        except Exception as e:
+            print(f"Error playing WAV file: {e}")
 
     def analyze_wav(self, wav_file):
         """Analyze and display WAV file properties"""
@@ -107,24 +158,32 @@ def main():
     robot = RobotVoiceSystem()
     
     # Process flow
-    input_wav = "AUDIO (3).wav"
-    output_wav = "output.wav"
+    input_wav = "AUDIO (3).wav"  # Input WAV file (ensure it's valid)
+    output_wav = "output.wav"  # Output WAV file with desired properties (11000 Hz, 8-bit, Mono)
     
     # 1. Convert input WAV to text
     text = robot.process_audio(input_wav)
     if not text:
         return
     
+    print(f"User said: {text}")
+    
     # 2. Get AI response
     response = robot.get_ai_response(text)
     
-    # 3. Create audio response
+    print(f"AI Response: {response}")
+    
+    # 3. Create audio response with the desired properties
     success = robot.create_audio_response(response, output_wav)
     
     if success:
         print(f"Response saved to {output_wav}")
-        # Analyze the output WAV file
+        
+        # Analyze and print properties of the output WAV file
         robot.analyze_wav(output_wav)
+        
+        # 4. Play the processed output WAV file
+        robot.play_wav(output_wav)
     else:
         print("Failed to create response")
 
