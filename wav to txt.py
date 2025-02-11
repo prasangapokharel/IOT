@@ -159,7 +159,7 @@ class ShortPhraseTranscriber:
                     pass
 
 def main():
-    wav_file = "Thank you for contac.wav"
+    wav_file = "AUDIO.wav"
     
     print(f"Processing file: {wav_file}")
     transcriber = ShortPhraseTranscriber(wav_file)
@@ -185,4 +185,5 @@ def main():
         print("3. Ensure microphone is close enough")
 
 if __name__ == "__main__":
+    
     main()

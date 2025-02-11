@@ -4,9 +4,11 @@ import requests
 import json
 import os
 import wave
-import pyaudio  # For playing the audio
+import time
+import librosa
 from dotenv import load_dotenv
 
+# Load environment variables (e.g., API keys)
 load_dotenv()
 
 class RobotVoiceSystem:
@@ -15,128 +17,79 @@ class RobotVoiceSystem:
         self.engine = pyttsx3.init()
         self.setup_voice()
         self.api_key = os.getenv('OPENAI_API_KEY')
-
+        
     def setup_voice(self):
-        """Configure voice settings for robot-like response using a female voice"""
+        """Configure voice settings for a more robotic response"""
         voices = self.engine.getProperty('voices')
-        # Select female voice if available
-        female_voice_found = False
         for voice in voices:
             if "female" in voice.name.lower():
                 self.engine.setProperty('voice', voice.id)
-                female_voice_found = True
                 break
-        if not female_voice_found:
-            print("Female voice not found. Using default voice.")
-        self.engine.setProperty('rate', 150)  # Moderate speed
-        self.engine.setProperty('volume', 0.9)  # Clear volume
+        self.engine.setProperty('rate', 150)  # Set to 0.75x speed
+        self.engine.setProperty('volume', 1)
 
     def process_audio(self, input_wav):
-        """Convert input WAV to text"""
+        """Convert input WAV to text with noise reduction and error handling"""
         try:
-            with sr.AudioFile(input_wav) as source:
+            y, sr = librosa.load(input_wav, sr=None)
+            librosa.output.write_wav("temp.wav", y, sr)
+            with sr.AudioFile("temp.wav") as source:
+                self.recognizer.adjust_for_ambient_noise(source)
                 print("Processing audio...")
                 audio = self.recognizer.record(source)
                 text = self.recognizer.recognize_google(audio)
+                print(f"Transcribed text: {text}")
                 return text
+        except sr.UnknownValueError:
+            print("Could not understand the audio.")
+        except sr.RequestError:
+            print("Speech recognition service is unavailable.")
         except Exception as e:
             print(f"Audio processing error: {e}")
-            return None
+        return None
 
     def get_ai_response(self, text):
-        """Get concise AI response"""
+        """Get AI-generated response with enhanced error handling"""
         try:
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             }
-            
-            prompt = f"As a robot assistant, provide a clear and concise response (max 50 words) to: {text}"
-            
             payload = {
                 "model": "gpt-3.5-turbo",
                 "messages": [
-                    {"role": "system", "content": "You are a helpful robot assistant. Keep responses under 50 words."},
-                    {"role": "user", "content": prompt}
+                    {"role": "system", "content": "You are a futuristic robot assistant. Keep responses under 50 words."},
+                    {"role": "user", "content": text}
                 ]
             }
-
             response = requests.post(
                 'https://openrouter.ai/api/v1/chat/completions',
                 headers=headers,
                 json=payload
             )
-
             if response.status_code == 200:
-                return response.json()['choices'][0]['message']['content']
-            return "I apologize, I cannot process your request at the moment."
-            
+                ai_response = response.json()['choices'][0]['message']['content']
+                print(f"AI Response: {ai_response}")
+                return ai_response
+            else:
+                print("Error from API. Using fallback response.")
         except Exception as e:
             print(f"API error: {e}")
-            return "System processing error occurred."
+        return "I'm sorry, I cannot process your request at the moment."
 
     def create_audio_response(self, text, output_wav):
-        """Convert text to WAV audio with specified properties (11000 Hz, 8-bit, Mono)"""
+        """Convert text to WAV with AI-like speech"""
         try:
-            # Save the speech to a temporary file first
-            temp_wav = "temp_output.wav"
-            self.engine.save_to_file(text, temp_wav)
+            self.engine.save_to_file(text, output_wav)
             self.engine.runAndWait()
-
-            # Convert the temporary file to the desired properties: 11000 Hz, 8-bit, Mono
-            with wave.open(temp_wav, 'rb') as temp_audio:
-                # Get the parameters of the temporary file
-                params = temp_audio.getparams()
-
-                # Set desired properties for the output WAV file
-                new_params = (
-                    1,  # Mono channel
-                    1,  # 8-bit sample width
-                    11000,  # Sample rate: 11000 Hz
-                    params.nframes,  # Number of frames (unchanged)
-                    params.comptype,  # Compression type
-                    params.compname  # Compression name
-                )
-
-                # Open the output file with the desired parameters
-                with wave.open(output_wav, 'wb') as output_audio:
-                    output_audio.setparams(new_params)
-
-                    # Read the original audio data and write it to the new file with adjusted properties
-                    frames = temp_audio.readframes(params.nframes)
-                    output_audio.writeframes(frames)
-
-            os.remove(temp_wav)  # Clean up the temporary file
+            print(f"Audio response saved to {output_wav}")
             return True
         except Exception as e:
             print(f"Speech generation error: {e}")
             return False
 
-    def play_wav(self, wav_file):
-        """Play the WAV file with the specified sample rate, width, and channels"""
-        try:
-            wf = wave.open(wav_file, 'rb')
-            p = pyaudio.PyAudio()
-
-            stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
-                            channels=wf.getnchannels(),
-                            rate=wf.getframerate(),
-                            output=True)
-
-            data = wf.readframes(1024)
-
-            while data:
-                stream.write(data)
-                data = wf.readframes(1024)
-
-            stream.stop_stream()
-            stream.close()
-            p.terminate()
-        except Exception as e:
-            print(f"Error playing WAV file: {e}")
-
     def analyze_wav(self, wav_file):
-        """Analyze and display WAV file properties"""
+        """Analyze WAV file properties"""
         try:
             with wave.open(wav_file, 'rb') as audio:
                 channels = audio.getnchannels()
@@ -154,38 +107,24 @@ class RobotVoiceSystem:
         except Exception as e:
             print(f"Error analyzing WAV file: {e}")
 
-def main():
-    robot = RobotVoiceSystem()
-    
-    # Process flow
-    input_wav = "AUDIO (3).wav"  # Input WAV file (ensure it's valid)
-    output_wav = "output.wav"  # Output WAV file with desired properties (11000 Hz, 8-bit, Mono)
-    
-    # 1. Convert input WAV to text
-    text = robot.process_audio(input_wav)
-    if not text:
-        return
-    
-    print(f"User said: {text}")
-    
-    # 2. Get AI response
-    response = robot.get_ai_response(text)
-    
-    print(f"AI Response: {response}")
-    
-    # 3. Create audio response with the desired properties
-    success = robot.create_audio_response(response, output_wav)
-    
-    if success:
-        print(f"Response saved to {output_wav}")
+    def run(self, input_wav="AUDIO.wav", output_wav="output.wav"):
+        """Main processing function"""
+        if not os.path.exists(input_wav):
+            print("Input WAV file not found.")
+            return
         
-        # Analyze and print properties of the output WAV file
-        robot.analyze_wav(output_wav)
+        text = self.process_audio(input_wav)
+        if not text:
+            return
         
-        # 4. Play the processed output WAV file
-        robot.play_wav(output_wav)
-    else:
-        print("Failed to create response")
+        response = self.get_ai_response(text)
+        success = self.create_audio_response(response, output_wav)
+        
+        if success:
+            self.analyze_wav(output_wav)
+        else:
+            print("Failed to generate voice response.")
 
 if __name__ == "__main__":
-    main()
+    robot = RobotVoiceSystem()
+    robot.run()

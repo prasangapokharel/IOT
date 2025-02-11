@@ -27,7 +27,7 @@ class RobotVoiceSystem:
                 break
         if not female_voice_found:
             print("Female voice not found. Using default voice.")
-        self.engine.setProperty('rate', 150)  # Moderate speed
+        self.engine.setProperty('rate', 200)  # Moderate speed
         self.engine.setProperty('volume', 5)  # Clear volume
 
     def process_audio(self, input_wav):
